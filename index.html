@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>教师反馈 · 设计工作室 | 精准润色 无幻觉</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #f6f8fa; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 3rem 1.5rem; }
+    .app { max-width: 1000px; margin: 0 auto; }
+    h1 { font-size: 2.4rem; margin-bottom: 0.6rem; background: linear-gradient(145deg, #2a3b66, #3c4f7a); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    h2 { font-size: 1.8rem; margin: 1.5rem 0 1rem; }
+    .card { background: rgba(255,255,255,0.85); backdrop-filter: blur(4px); border-radius: 28px; padding: 1.8rem; margin-bottom: 2rem; box-shadow: 0 8px 24px rgba(0,0,0,0.05); }
+    .btn { display: inline-block; padding: 0.6rem 1.5rem; border-radius: 40px; font-weight: 500; border: 1px solid #ccc; cursor: pointer; background: white; margin: 0.25rem; transition: all 0.2s; }
+    .btn-primary { background: #8a6eff; border-color: #8a6eff; color: white; }
+    .btn-primary:hover { background: #9a82ff; }
+    .btn-outline { background: transparent; border-color: #d0d7de; }
+    .btn-outline:hover { background: #f3f4f6; border-color: #8a6eff; }
+    textarea, input { width: 100%; padding: 0.8rem; border-radius: 16px; border: 1px solid #ddd; font-family: monospace; margin: 0.5rem 0; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+    th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; vertical-align: top; }
+    .checkbox-col { text-align: center; width: 70px; }
+    .word-count { display: flex; gap: 1rem; align-items: center; margin: 1rem 0; flex-wrap: wrap; }
+    .output { background: #f6f8fa; border-radius: 20px; padding: 1.2rem; white-space: pre-wrap; font-family: monospace; margin: 1rem 0; }
+    .toggle-buttons { margin: 0.5rem 0; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+    .flex-between { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+    .mt-2 { margin-top: 1rem; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <h1>教师反馈 · 设计工作室</h1>
+
+  <div class="card">
+    <h2>步骤1 · 定义反馈模板</h2>
+    <p>用 <code>__（内容）__</code> 标记填空项</p>
+    <pre>__（学生姓名）__ 本周__（学习科目）__ 学习情况反馈如下
+【学习内容】
+本周学习__（学习内容）__
+
+【学习情况】
+__（学习情况）__
+
+【学习状态】
+__（学习状态）__
+
+【我的调整】
+__（我的调整）__</pre>
+    <textarea id="template" rows="8" placeholder="粘贴你的模板"></textarea>
+    <div>
+      <button class="btn btn-primary" onclick="parseTemplate()">下一步 → 提取填空项</button>
+      <button class="btn btn-outline" onclick="saveSettings()">保存设置</button>
+    </div>
+  </div>
+
+  <div class="card" id="step2" style="display: none;">
+    <div class="flex-between">
+      <h2>步骤2 · 填写学生数据</h2>
+      <button class="btn btn-outline" onclick="saveSettings()">💾 保存当前设置</button>
+    </div>
+    <div class="word-count">
+      <label>目标字数：</label>
+      <input type="number" id="targetWords" value="80" min="40" max="800">
+    </div>
+    <div class="toggle-buttons" id="field-controls"></div>
+    <table id="dataTable">
+      <thead id="tableHead"></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+    <div class="button-group" style="display: flex; gap: 1rem; margin-top: 1rem;">
+      <button class="btn btn-outline" onclick="addRow()">+ 添加一名学生</button>
+      <button class="btn btn-primary" onclick="generateFeedback()">生成所有反馈 →</button>
+    </div>
+  </div>
+
+  <div class="card" id="step3" style="display: none;">
+    <h2>步骤3 · 反馈结果</h2>
+    <div id="results"></div>
+  </div>
+</div>
+
+<script>
+  // ---------- 全局变量 ----------
+  let placeholders = [];
+  let fieldNames = [];
+  let polishFlags = [];
+
+  function parseTemplate() {
+    const template = document.getElementById('template').value.trim();
+    if (!template) { alert('请输入模板'); return; }
+    const regex = /__（([^）]+)）__/g;
+    const matches = [];
+    let m;
+    while ((m = regex.exec(template)) !== null) {
+      matches.push({ full: m[0], inner: m[1].trim() });
+    }
+    if (matches.length === 0) { alert('模板中没有 __（内容）__ 格式的占位符'); return; }
+    const uniqueMap = new Map();
+    matches.forEach(m => { if (!uniqueMap.has(m.full)) uniqueMap.set(m.full, m.inner); });
+    placeholders = Array.from(uniqueMap.keys());
+    fieldNames = Array.from(uniqueMap.values());
+    polishFlags = fieldNames.map(() => true);
+
+    buildTable();
+    document.getElementById('step2').style.display = 'block';
+    document.getElementById('step3').style.display = 'none';
+  }
+
+  function buildTable() {
+    const thead = document.getElementById('tableHead');
+    thead.innerHTML = '<tr>' + fieldNames.map(n => `<th>${n}</th>`).join('') + '<th>🔧 润色</th></tr>';
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = '';
+    for (let i = 0; i < 3; i++) addRow();
+    renderFieldControls();
+  }
+
+  function renderFieldControls() {
+    const container = document.getElementById('field-controls');
+    container.innerHTML = '<strong>✏️ 字段级润色开关：</strong>';
+    fieldNames.forEach((name, idx) => {
+      const label = document.createElement('label');
+      label.style.display = 'inline-flex';
+      label.style.alignItems = 'center';
+      label.style.gap = '6px';
+      label.style.marginRight = '16px';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = polishFlags[idx];
+      cb.onchange = (e) => {
+        polishFlags[idx] = e.target.checked;
+        savePolishFlags();
+      };
+      const span = document.createElement('span');
+      span.textContent = name;
+      label.appendChild(cb);
+      label.appendChild(span);
+      container.appendChild(label);
+    });
+    const btnAll = document.createElement('button');
+    btnAll.textContent = '全选润色';
+    btnAll.className = 'btn-outline';
+    btnAll.onclick = () => toggleAllPolishing(true);
+    const btnNone = document.createElement('button');
+    btnNone.textContent = '全不润色';
+    btnNone.className = 'btn-outline';
+    btnNone.onclick = () => toggleAllPolishing(false);
+    container.appendChild(btnAll);
+    container.appendChild(btnNone);
+  }
+
+  function toggleAllPolishing(flag) {
+    polishFlags = polishFlags.map(() => flag);
+    const checkboxes = document.querySelectorAll('#field-controls input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = flag);
+    savePolishFlags();
+  }
+
+  function savePolishFlags() {
+    localStorage.setItem('feedbackTool_polishFlags', JSON.stringify(polishFlags));
+  }
+
+  function loadPolishFlags() {
+    const saved = localStorage.getItem('feedbackTool_polishFlags');
+    if (saved) {
+      try {
+        const arr = JSON.parse(saved);
+        if (arr.length === fieldNames.length) polishFlags = arr;
+      } catch(e) {}
+    }
+  }
+
+  function addRow() {
+    const tbody = document.getElementById('tableBody');
+    const tr = document.createElement('tr');
+    for (let i = 0; i < fieldNames.length; i++) {
+      const td = document.createElement('td');
+      const textarea = document.createElement('textarea');
+      textarea.rows = 1;
+      textarea.placeholder = `填写${fieldNames[i]}`;
+      textarea.style.width = '100%';
+      td.appendChild(textarea);
+      tr.appendChild(td);
+    }
+    const tdCheck = document.createElement('td');
+    tdCheck.classList.add('checkbox-col');
+    tdCheck.innerHTML = '—';
+    tr.appendChild(tdCheck);
+    tbody.appendChild(tr);
+  }
+
+  function getAllStudentsData() {
+    const rows = document.querySelectorAll('#tableBody tr');
+    const data = [];
+    for (const row of rows) {
+      const textareas = row.querySelectorAll('textarea');
+      const values = Array.from(textareas).map(ta => ta.value.trim());
+      data.push(values);
+    }
+    return data;
+  }
+
+  // ---------- 新的保护机制：用标记包裹不润色的内容，让AI看见但不能修改 ----------
+  function protectUnpolishedFields(template, placeholderList, studentValues, polishFlagsArr) {
+    let result = template;
+    const protectionMap = new Map(); // 用于还原时去掉标记
+    for (let i = 0; i < placeholderList.length; i++) {
+      const ph = placeholderList[i];
+      let value = studentValues[i] !== undefined ? studentValues[i] : '';
+      if (!polishFlagsArr[i]) {
+        // 不润色：用【不变开始】和【不变结束】包裹，并告知AI不得修改
+        const wrapped = `【不变开始】${value}【不变结束】`;
+        result = result.split(ph).join(wrapped);
+        // 记录这个值，但不需要特殊标记，因为包裹本身就是标记
+      } else {
+        // 润色：直接替换为原文
+        result = result.split(ph).join(value);
+      }
+    }
+    // 清理残留占位符（未填写的）
+    for (const ph of placeholderList) {
+      if (result.includes(ph)) {
+        result = result.split(ph).join('');
+      }
+    }
+    console.log('发送给AI的文本:', result);
+    return result;
+  }
+
+  function removeProtectionMarkers(text) {
+    // 移除所有【不变开始】和【不变结束】标记
+    return text.replace(/【不变开始】|【不变结束】/g, '');
+  }
+
+  async function polishWithAI(rawText, targetWords, studentName) {
+    const maxTokens = Math.min(Math.max(Math.floor(targetWords * 2.5), 200), 2000);
+    const prompt = `你是一位温柔专业的老师。下面是一段教师反馈草稿。请你在【绝不改变任何具体信息】的前提下进行润色和扩写，使反馈更加充实、有鼓励性，并且字数必须接近 ${targetWords} 字（误差不超过 20 字）。
+
+【重要】草稿中可能包含【不变开始】...【不变结束】标记，这两个标记之间的内容必须【原封不动】地保留，绝对不能修改或删除其中的任何字符。标记本身在输出时也要保留。
+
+如果原始草稿字数不足，请你根据【学科特点】进行专业扩写，扩展方向示例：
+- 语文：增加阅读、写作、古诗文理解等建议，但不得改变学生实际学习内容。
+- 数学：分析解题思路、逻辑推理、计算习惯。
+- 英语：提及词汇积累、语法掌握、口语或听力表现。
+- 其他学科：类似地，补充学科特有的学习方法。
+
+【严格规则】：
+1. 绝对禁止添加任何草稿中不存在的新信息（如虚构的成绩、活动、书名等）。
+2. 不得修改学生姓名、科目名称、具体学习内容（如“6份学案”不能改成“6份难题”）。
+3. 不得删减任何核心事实。
+4. 只允许调整句子连接词、语序，增加过渡词和合理的鼓励性语句。
+5. 直接输出润色后的反馈，不要加任何解释、标题或引号。
+6. 绝对不要使用“我”、“我们”，请统一用“老师”。
+7. 模板中的固定文字（如“本周学习”、“【学习内容】”等）必须原样保留，不得增删标点或空格。
+8. 称呼学生时不要用“你”，必须用学生姓名“${studentName}”。
+
+【草稿】：
+${rawText}
+
+润色后的反馈：`;
+
+    try {
+      const res = await fetch('http://localhost:3000/api/polish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, max_tokens: maxTokens })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      return data.result;
+    } catch (err) {
+      console.error('润色失败:', err);
+      return rawText + '\n\n（AI润色暂时不可用，已展示原始内容）';
+    }
+  }
+
+  async function generateForOneStudent(studentValues, studentName, targetWords, template, placeholderList, polishFlagsArr) {
+    // 1. 保护不润色字段（添加【不变开始】标记）
+    const textWithMarks = protectUnpolishedFields(template, placeholderList, studentValues, polishFlagsArr);
+    if (!textWithMarks.trim()) return '（该学生信息未填写完整）';
+    try {
+      let polished = await polishWithAI(textWithMarks, targetWords, studentName);
+      // 2. 移除保护标记，还原干净文本
+      polished = removeProtectionMarkers(polished);
+      const wordCount = polished.replace(/\s+/g, '').length;
+      console.log(`✅ ${studentName} 反馈字数: ${wordCount} / 目标 ${targetWords}`);
+      return polished;
+    } catch (err) {
+      const fallback = removeProtectionMarkers(textWithMarks);
+      return fallback + '\n\n（润色服务异常，以上为原始内容）';
+    }
+  }
+
+  async function generateFeedback() {
+    const template = document.getElementById('template').value.trim();
+    if (!template) { alert('请先在步骤1定义模板'); return; }
+    const regex = /__（([^）]+)）__/g;
+    let phMatches = [];
+    let m;
+    while ((m = regex.exec(template)) !== null) phMatches.push(m[0]);
+    if (phMatches.length === 0) { alert('模板中没有占位符'); return; }
+    const currentPlaceholders = [...new Set(phMatches)];
+    const students = getAllStudentsData();
+    if (students.length === 0) { alert('请至少添加一行学生数据'); return; }
+    const targetWords = parseInt(document.getElementById('targetWords').value) || 80;
+    const resultsDiv = document.getElementById('results');
+    resultsDiv.innerHTML = '<div>✨ 生成中，请稍候...</div>';
+    document.getElementById('step3').style.display = 'block';
+    resultsDiv.innerHTML = '';
+
+    for (let i = 0; i < students.length; i++) {
+      const row = students[i];
+      const studentName = row[0] || `学生${i+1}`;
+      const padded = [...row];
+      while (padded.length < currentPlaceholders.length) padded.push('');
+      const feedback = await generateForOneStudent(padded, studentName, targetWords, template, currentPlaceholders, polishFlags);
+      const div = document.createElement('div');
+      div.className = 'result-item';
+      div.innerHTML = `<strong>✨ ${escapeHtml(studentName)}</strong><pre class="output">${escapeHtml(feedback)}</pre>`;
+      resultsDiv.appendChild(div);
+    }
+    if (resultsDiv.children.length === 0) resultsDiv.innerHTML = '<div>没有生成任何反馈</div>';
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/[&<>]/g, function(c) {
+      if (c === '&') return '&amp;';
+      if (c === '<') return '&lt;';
+      if (c === '>') return '&gt;';
+      return c;
+    });
+  }
+
+  function saveSettings() {
+    const template = document.getElementById('template').value.trim();
+    const targetWords = document.getElementById('targetWords').value;
+    const students = getAllStudentsData();
+    localStorage.setItem('feedbackTool_template', template);
+    localStorage.setItem('feedbackTool_targetWords', targetWords);
+    localStorage.setItem('feedbackTool_studentsData', JSON.stringify(students));
+    if (placeholders.length) {
+      localStorage.setItem('feedbackTool_placeholders', JSON.stringify(placeholders));
+      localStorage.setItem('feedbackTool_fieldNames', JSON.stringify(fieldNames));
+    }
+    savePolishFlags();
+    alert('已保存模板、字数、学生数据、润色开关');
+  }
+
+  window.addEventListener('load', () => {
+    const savedTemplate = localStorage.getItem('feedbackTool_template');
+    if (savedTemplate) document.getElementById('template').value = savedTemplate;
+    const savedTarget = localStorage.getItem('feedbackTool_targetWords');
+    if (savedTarget) document.getElementById('targetWords').value = savedTarget;
+    const savedStudents = localStorage.getItem('feedbackTool_studentsData');
+    const savedPlaceholders = localStorage.getItem('feedbackTool_placeholders');
+    const savedFieldNames = localStorage.getItem('feedbackTool_fieldNames');
+    if (savedTemplate && savedTemplate.trim()) {
+      parseTemplate();
+      if (savedFieldNames && savedPlaceholders) {
+        try {
+          const oldNames = JSON.parse(savedFieldNames);
+          if (JSON.stringify(oldNames) === JSON.stringify(fieldNames)) {
+            loadPolishFlags();
+            renderFieldControls();
+          }
+        } catch(e) {}
+      }
+      if (savedStudents) {
+        try {
+          const data = JSON.parse(savedStudents);
+          const tbody = document.getElementById('tableBody');
+          if (tbody && data.length) {
+            tbody.innerHTML = '';
+            data.forEach(row => {
+              addRow();
+              const tr = tbody.lastChild;
+              const tareas = tr.querySelectorAll('textarea');
+              row.forEach((val, idx) => {
+                if (tareas[idx]) tareas[idx].value = val;
+              });
+            });
+          }
+          document.getElementById('step2').style.display = 'block';
+        } catch(e) { console.warn(e); }
+      } else {
+        document.getElementById('step2').style.display = 'block';
+      }
+    }
+  });
+</script>
+</body>
+</html>
