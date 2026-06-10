@@ -276,11 +276,11 @@ ${rawText}
       }
       const data = await response.json();
       return data.result;
-    } catch (err) {
-      console.error('润色失败:', err);
-      return rawText + '\n\n（润色服务暂时不可用，已展示原始内容）';
-    }
-  }
+    }catch (err) {
+  console.error('润色失败:', err);
+  alert('API请求失败：' + err.message);   // 加上这一行弹窗
+  return rawText + '\n\n（润色服务暂时不可用，已展示原始内容）';
+}
 
   async function generateForOneStudent(studentValues, studentName, targetWords, template, placeholderList, polishFlagsArr) {
     const textWithMarks = protectUnpolishedFields(template, placeholderList, studentValues, polishFlagsArr);
