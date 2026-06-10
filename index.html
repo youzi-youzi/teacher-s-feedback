@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>教师反馈 · 设计工作室 | 精准润色 无幻觉</title>
+  <title>教师反馈 · 设计工作室 | 平静润色 无幻觉</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #f6f8fa; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 3rem 1.5rem; }
@@ -80,6 +80,12 @@ __（我的调整）__</pre>
 </div>
 
 <script>
+  // ==================== 重要：修改这里为你的 Vercel 后端地址 ====================
+  // 请将下面的地址替换成你部署在 Vercel 上的实际项目地址（例如 https://你的项目名.vercel.app）
+  // 注意：不要以斜杠结尾，不要包含 /api/polish 部分
+  const API_BASE_URL = 'https://你的项目名.vercel.app';   // <----- 务必修改此处
+  // ==========================================================================
+
   // ---------- 全局变量 ----------
   let placeholders = [];
   let fieldNames = [];
@@ -203,21 +209,16 @@ __（我的调整）__</pre>
   // ---------- 新的保护机制：用标记包裹不润色的内容，让AI看见但不能修改 ----------
   function protectUnpolishedFields(template, placeholderList, studentValues, polishFlagsArr) {
     let result = template;
-    const protectionMap = new Map(); // 用于还原时去掉标记
     for (let i = 0; i < placeholderList.length; i++) {
       const ph = placeholderList[i];
       let value = studentValues[i] !== undefined ? studentValues[i] : '';
       if (!polishFlagsArr[i]) {
-        // 不润色：用【不变开始】和【不变结束】包裹，并告知AI不得修改
         const wrapped = `【不变开始】${value}【不变结束】`;
         result = result.split(ph).join(wrapped);
-        // 记录这个值，但不需要特殊标记，因为包裹本身就是标记
       } else {
-        // 润色：直接替换为原文
         result = result.split(ph).join(value);
       }
     }
-    // 清理残留占位符（未填写的）
     for (const ph of placeholderList) {
       if (result.includes(ph)) {
         result = result.split(ph).join('');
@@ -228,31 +229,35 @@ __（我的调整）__</pre>
   }
 
   function removeProtectionMarkers(text) {
-    // 移除所有【不变开始】和【不变结束】标记
     return text.replace(/【不变开始】|【不变结束】/g, '');
   }
 
+  // ========== 修改后的润色函数：语气柔和平静，不慷慨激昂 ==========
   async function polishWithAI(rawText, targetWords, studentName) {
-    const maxTokens = Math.min(Math.max(Math.floor(targetWords * 2.5), 200), 2000);
-    const prompt = `你是一位温柔专业的老师。下面是一段教师反馈草稿。请你在【绝不改变任何具体信息】的前提下进行润色和扩写，使反馈更加充实、有鼓励性，并且字数必须接近 ${targetWords} 字（误差不超过 20 字）。
+    const prompt = `你是一位平静、客观的老师。下面是一段教师反馈草稿。请你在【绝不改变任何具体信息】的前提下进行润色和适当扩写，使反馈更加完整、流畅，总字数接近 ${targetWords} 字（误差不超过 20 字）。
 
 【重要】草稿中可能包含【不变开始】...【不变结束】标记，这两个标记之间的内容必须【原封不动】地保留，绝对不能修改或删除其中的任何字符。标记本身在输出时也要保留。
 
-如果原始草稿字数不足，请你根据【学科特点】进行专业扩写，扩展方向示例：
-- 语文：增加阅读、写作、古诗文理解等建议，但不得改变学生实际学习内容。
-- 数学：分析解题思路、逻辑推理、计算习惯。
-- 英语：提及词汇积累、语法掌握、口语或听力表现。
-- 其他学科：类似地，补充学科特有的学习方法。
+如果原始草稿字数不足，请你根据学科特点进行补充：
+- 语文：提及阅读、写作或古诗文理解情况。
+- 数学：分析解题思路、逻辑或计算习惯。
+- 英语：说明词汇、语法或口语表现。
+- 其他学科：类似地，补充学科特有的学习观察。
+
+【语气要求】：
+- 保持平静、温和，避免使用感叹号或夸张的赞美词（如“太棒了”“非常出色”）。
+- 使用陈述句式，如“老师注意到……”“可以尝试……”“总体来说……”。
+- 鼓励时用平实的语言，例如“继续努力”“保持节奏”。
+- 不要使用“我”、“我们”，统一用“老师”自称。
+- 称呼学生时不用“你”，必须用学生姓名“${studentName}”。
 
 【严格规则】：
 1. 绝对禁止添加任何草稿中不存在的新信息（如虚构的成绩、活动、书名等）。
 2. 不得修改学生姓名、科目名称、具体学习内容（如“6份学案”不能改成“6份难题”）。
 3. 不得删减任何核心事实。
-4. 只允许调整句子连接词、语序，增加过渡词和合理的鼓励性语句。
+4. 只允许调整句子连接词、语序，增加合理的过渡句。
 5. 直接输出润色后的反馈，不要加任何解释、标题或引号。
-6. 绝对不要使用“我”、“我们”，请统一用“老师”。
-7. 模板中的固定文字（如“本周学习”、“【学习内容】”等）必须原样保留，不得增删标点或空格。
-8. 称呼学生时不要用“你”，必须用学生姓名“${studentName}”。
+6. 模板中的固定文字（如“本周学习”、“【学习内容】”等）必须原样保留，不得增删标点或空格。
 
 【草稿】：
 ${rawText}
@@ -260,27 +265,28 @@ ${rawText}
 润色后的反馈：`;
 
     try {
-      const res = await fetch('http://localhost:3000/api/polish', {
+      const response = await fetch(`${API_BASE_URL}/api/polish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, max_tokens: maxTokens })
+        body: JSON.stringify({ prompt })
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || `HTTP ${response.status}`);
+      }
+      const data = await response.json();
       return data.result;
     } catch (err) {
       console.error('润色失败:', err);
-      return rawText + '\n\n（AI润色暂时不可用，已展示原始内容）';
+      return rawText + '\n\n（润色服务暂时不可用，已展示原始内容）';
     }
   }
 
   async function generateForOneStudent(studentValues, studentName, targetWords, template, placeholderList, polishFlagsArr) {
-    // 1. 保护不润色字段（添加【不变开始】标记）
     const textWithMarks = protectUnpolishedFields(template, placeholderList, studentValues, polishFlagsArr);
     if (!textWithMarks.trim()) return '（该学生信息未填写完整）';
     try {
       let polished = await polishWithAI(textWithMarks, targetWords, studentName);
-      // 2. 移除保护标记，还原干净文本
       polished = removeProtectionMarkers(polished);
       const wordCount = polished.replace(/\s+/g, '').length;
       console.log(`✅ ${studentName} 反馈字数: ${wordCount} / 目标 ${targetWords}`);
