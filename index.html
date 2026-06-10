@@ -206,7 +206,6 @@ __（我的调整）__</pre>
     return data;
   }
 
-  // ---------- 新的保护机制：用标记包裹不润色的内容，让AI看见但不能修改 ----------
   function protectUnpolishedFields(template, placeholderList, studentValues, polishFlagsArr) {
     let result = template;
     for (let i = 0; i < placeholderList.length; i++) {
@@ -232,7 +231,7 @@ __（我的调整）__</pre>
     return text.replace(/【不变开始】|【不变结束】/g, '');
   }
 
-  // ========== 修改后的润色函数：语气柔和平静，不慷慨激昂 ==========
+  // ========== 修正后的润色函数（语法正确） ==========
   async function polishWithAI(rawText, targetWords, studentName) {
     const prompt = `你是一位平静、客观的老师。下面是一段教师反馈草稿。请你在【绝不改变任何具体信息】的前提下进行润色和适当扩写，使反馈更加完整、流畅，总字数接近 ${targetWords} 字（误差不超过 20 字）。
 
@@ -276,11 +275,12 @@ ${rawText}
       }
       const data = await response.json();
       return data.result;
-    }catch (err) {
-  console.error('润色失败:', err);
-  alert('API请求失败：' + err.message);   // 加上这一行弹窗
-  return rawText + '\n\n（润色服务暂时不可用，已展示原始内容）';
-}
+    } catch (err) {
+      console.error('润色失败:', err);
+      alert('API请求失败：' + err.message);
+      return rawText + '\n\n（润色服务暂时不可用，已展示原始内容）';
+    }
+  }
 
   async function generateForOneStudent(studentValues, studentName, targetWords, template, placeholderList, polishFlagsArr) {
     const textWithMarks = protectUnpolishedFields(template, placeholderList, studentValues, polishFlagsArr);
